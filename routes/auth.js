@@ -1,16 +1,21 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const config = require('../config');
 
+const { secret } = config;
 
-module.exports = (app, next) => {
-  const { secret } = app.get('config');
-
-  /*
-   * Ruta de autenticación usando email y password
-   * Toda autenticación se hace a través de POST, ya que de esta forma nos 
-   * aseguramos que la información de email y password vayan cifradas en el 
-   * cuerpo de la petición (siempre y cuando usemos HTTPS con protocolos 
-   * seguros).
+/** @module auth */
+module.exports = (app, nextMain) => {
+  /**
+   * @name /auth
+   * @description Crea token de autenticación.
+   * @path {POST} /auth
+   * @body {String} email Correo
+   * @body {String} password Contraseña
+   * @response {Object} resp
+   * @response {String} resp.token Token a usar para los requests sucesivos
+   * @code {200} si la autenticación es correcta
+   * @code {400} si no se proveen `email` o `password` o ninguno de los dos
+   * @auth No requiere autenticación
    */
   app.post('/auth', (req, resp, next) => {
     const { email, password } = req.body;
@@ -19,13 +24,8 @@ module.exports = (app, next) => {
       return next(400);
     }
 
-    User.authenticate(email, password, (err, user) => {
-      if (err) {
-        return next(err);
-      }
-      resp.json({ token: jwt.sign({ uid: user._id }, secret) });
-    });
+    // TODO: autenticar a la usuarix
   });
 
-  return next();
+  return nextMain();
 };

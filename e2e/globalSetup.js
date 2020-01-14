@@ -2,12 +2,11 @@ const path = require('path');
 const { spawn } = require('child_process');
 const nodeFetch = require('node-fetch');
 const kill = require('tree-kill');
-const config = require('../config');
 
+const config = require('../config');
 
 const port = process.env.PORT || 8888;
 const baseUrl = process.env.REMOTE_URL || `http://127.0.0.1:${port}`;
-
 
 const __e2e = {
   port,
@@ -44,7 +43,7 @@ const fetch = (url, opts = {}) => nodeFetch(`${baseUrl}${url}`, {
 });
 
 
-const fetchWithAuth = token => (url, opts = {}) => fetch(url, {
+const fetchWithAuth = (token) => (url, opts = {}) => fetch(url, {
   ...opts,
   headers: {
     ...opts.headers,
@@ -52,64 +51,10 @@ const fetchWithAuth = token => (url, opts = {}) => fetch(url, {
   },
 });
 
-
 const fetchAsAdmin = (url, opts) => fetchWithAuth(__e2e.adminToken)(url, opts);
 const fetchAsTestUser = (url, opts) => fetchWithAuth(__e2e.testUserToken)(url, opts);
 
-
-const cleanUp = () => fetchAsAdmin(`/users/${__e2e.testUserCredentials.email}`, {
-  method: 'DELETE',
-})
-  .then((resp) => {
-    if (resp.status !== 200 && resp.status !== 404) {
-      console.error(`Error trying to delete test user (${resp.status})`);
-    }
-    return true; // done!
-  })
-  .then(() => fetchAsAdmin('/products'))
-  .then((resp) => {
-    if (resp.status !== 200 && process.env.DEBUG) {
-      console.error(`Could not get products ${resp.status}`);
-    }
-    return resp.json()
-      .then(json => Promise.all(
-        (Array.isArray(json) ? json : [])
-          .filter(product => product.name === 'Test')
-          .map(product => fetchAsAdmin(`/products/${product._id}`, { method: 'DELETE' })),
-      ))
-      .then((responses) => {
-        responses.forEach((resp) => {
-          if (resp.status !== 200 && process.env.DEBUG) {
-            console.error(`Could not delete test product ${resp.status}`);
-          }
-        });
-      });
-  })
-  .then(() => fetchAsAdmin('/orders'))
-  .then((resp) => {
-    if (resp.status !== 200 && process.env.DEBUG) {
-      console.error(`Could not get orders ${resp.status}`);
-    }
-    return resp.json()
-      .then(json => Promise.all(
-        (Array.isArray(json) ? json : [])
-          .filter(
-            order => order.items
-              .reduce((memo, item) => memo || item.name === 'Test', false),
-          )
-          .map(order => fetchAsAdmin(`/orders/${order._id}`, { method: 'DELETE' })),
-      ))
-      .then((responses) => {
-        responses.forEach((resp) => {
-          if (resp.status !== 200) {
-            console.error(`Could not delete test order ${resp.status}`);
-          }
-        });
-      });
-  });
-
-
-const createTestUser = () => fetch('/users', {
+const createTestUser = () => fetchAsAdmin('/users', {
   method: 'POST',
   body: __e2e.testUserCredentials,
 })
@@ -126,7 +71,6 @@ const createTestUser = () => fetch('/users', {
     return resp.json();
   })
   .then(({ token }) => Object.assign(__e2e, { testUserToken: token }));
-
 
 const checkAdminCredentials = () => fetch('/auth', {
   method: 'POST',
@@ -149,7 +93,7 @@ const waitForServerToBeReady = (retries = 10) => new Promise((resolve, reject) =
 
   setTimeout(() => {
     fetch('/')
-      .then(resp => (
+      .then((resp) => (
         (resp.status !== 200)
           ? reject(new Error(`GET / responded with ${resp.status}`))
           : resolve()
@@ -161,11 +105,13 @@ const waitForServerToBeReady = (retries = 10) => new Promise((resolve, reject) =
 
 module.exports = () => new Promise((resolve, reject) => {
   if (process.env.REMOTE_URL) {
-    console.log(`Running tests on remote server ${process.env.REMOTE_URL}`);
+    console.info(`Running tests on remote server ${process.env.REMOTE_URL}`);
     return resolve();
   }
 
-  console.log('Staring local server...');
+  // TODO: Configurar DB de tests
+
+  console.info('Staring local server...');
   const child = spawn('npm', ['start', process.env.PORT || 8888], {
     cwd: path.resolve(__dirname, '../'),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -173,9 +119,9 @@ module.exports = () => new Promise((resolve, reject) => {
 
   Object.assign(__e2e, { childProcessPid: child.pid });
 
-  // child.stdout.on('data', (chunk) => {
-  //   console.log('child::stdout', chunk.toString());
-  // });
+  child.stdout.on('data', (chunk) => {
+    console.info(`\x1b[34m${chunk.toString()}\x1b[0m`);
+  });
 
   child.stderr.on('data', (chunk) => {
     const str = chunk.toString();
@@ -193,7 +139,6 @@ module.exports = () => new Promise((resolve, reject) => {
 
   waitForServerToBeReady()
     .then(checkAdminCredentials)
-    .then(cleanUp)
     .then(createTestUser)
     .then(resolve)
     .catch((err) => {
@@ -201,14 +146,8 @@ module.exports = () => new Promise((resolve, reject) => {
     });
 });
 
-
 // Export globals - ugly... :-(
 global.__e2e = __e2e;
-
-
-// Export `cleanUp` so that it can be used in `globalTeardown`.
-module.exports.cleanUp = cleanUp;
-
 
 // Export stuff to be used in tests!
 process.baseUrl = baseUrl;

@@ -6,10 +6,9 @@ const httpErrors = {
   500: 'Internal server error',
 };
 
-const isKnownHTTPErrorStatus = num => (
+const isKnownHTTPErrorStatus = (num) => (
   typeof num === 'number' && Object.keys(httpErrors).indexOf(`${num}`) >= 0
 );
-
 
 // eslint-disable-next-line no-unused-vars
 module.exports = (err, req, resp, next) => {
@@ -23,4 +22,5 @@ module.exports = (err, req, resp, next) => {
   }
 
   resp.status(statusCode).json({ statusCode, message });
+  next();
 };
